@@ -95,3 +95,49 @@ describe('mongoose-log-history plugin - Default Value on Missing Field', () => {
     expect(logs.length).toBe(0);
   });
 });
+
+describe('mongoose-log-history plugin - Explicit Set of Default-Value Field', () => {
+  let OrderActive;
+  let LogHistoryActive;
+
+  beforeAll(() => {
+    const schema = new mongoose.Schema({
+      name: String,
+      active: { type: Boolean, default: false },
+    });
+
+    schema.plugin(changeLoggingPlugin, {
+      modelName: 'OrderActive',
+      trackedFields: [{ value: 'active' }],
+      singleCollection: true,
+    });
+
+    OrderActive = mongoose.model('OrderActive', schema);
+    LogHistoryActive = getLogHistoryModel('OrderActive', true);
+  });
+
+  afterEach(async () => {
+    await OrderActive.deleteMany({});
+    await LogHistoryActive.deleteMany({});
+  });
+
+  const wait = () => new Promise((resolve) => setTimeout(resolve, 100));
+
+  it('logs an update when a missing field is explicitly set to its default value', async () => {
+    // Simulate a legacy document created before the `active` field was added to the schema
+    const result = await OrderActive.collection.insertOne({ name: 'legacy' });
+    const legacyId = result.insertedId;
+
+    const doc = await OrderActive.findById(legacyId);
+    doc.active = false;
+    doc.markModified('active');
+    await doc.save();
+    await wait();
+
+    const logs = await LogHistoryActive.find({ model_id: legacyId, change_type: 'update' }).lean();
+    expect(logs.length).toBe(1);
+    expect(logs[0].logs[0].field_name).toBe('active');
+    expect(logs[0].logs[0].to_value).toBe('false');
+    expect(logs[0].logs[0].change_type).toBe('add');
+  });
+});

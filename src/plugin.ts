@@ -790,13 +790,21 @@ export class ChangeLogPlugin {
           const _originalHydrated = await (doc.constructor as Model<Document>)
             .findById(doc._id)
             .select(trackedPaths.join(' '));
-          const originalDoc = (_originalHydrated ? _originalHydrated.toObject() : null) as Record<
-            string,
-            unknown
-          > | null;
 
-          if (!originalDoc) {
+          if (!_originalHydrated) {
             return next();
+          }
+
+          const originalDoc = _originalHydrated.toObject() as unknown as Record<string, unknown>;
+
+          // A field missing from the stored document appears as its schema default after
+          // .toObject(). If the current doc explicitly modified such a field (confirmed via
+          // markModified), the comparison would see two identical default values and skip it.
+          // Deleting it from originalDoc restores the "absent → value" diff.
+          for (const path of trackedPaths) {
+            if (_originalHydrated.$isDefault(path) && doc.isModified(path)) {
+              delete originalDoc[path];
+            }
           }
 
           let isSoftDelete = false;
