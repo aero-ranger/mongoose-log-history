@@ -787,10 +787,13 @@ export class ChangeLogPlugin {
             updatedData: doc.toObject(),
           });
         } else {
-          const originalDoc = (await (doc.constructor as Model<Document>)
+          const _originalHydrated = await (doc.constructor as Model<Document>)
             .findById(doc._id)
-            .select(trackedPaths.join(' '))
-            .lean()) as Record<string, unknown> | null;
+            .select(trackedPaths.join(' '));
+          const originalDoc = (_originalHydrated ? _originalHydrated.toObject() : null) as Record<
+            string,
+            unknown
+          > | null;
 
           if (!originalDoc) {
             return next();
