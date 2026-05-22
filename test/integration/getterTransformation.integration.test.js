@@ -96,6 +96,65 @@ describe('mongoose-log-history plugin - Default Value on Missing Field', () => {
   });
 });
 
+describe('mongoose-log-history plugin - Nested Default Value on Missing Field', () => {
+  let OrderNested;
+  let LogHistoryNested;
+
+  beforeAll(() => {
+    const schema = new mongoose.Schema({
+      name: String,
+      config: {
+        active: { type: Boolean, default: false },
+      },
+    });
+
+    schema.plugin(changeLoggingPlugin, {
+      modelName: 'OrderNested',
+      trackedFields: [{ value: 'config.active' }],
+      singleCollection: true,
+    });
+
+    OrderNested = mongoose.model('OrderNested', schema);
+    LogHistoryNested = getLogHistoryModel('OrderNested', true);
+  });
+
+  afterEach(async () => {
+    await OrderNested.deleteMany({});
+    await LogHistoryNested.deleteMany({});
+  });
+
+  const wait = () => new Promise((resolve) => setTimeout(resolve, 100));
+
+  it('does not log a false-positive when a nested default field is absent and unchanged', async () => {
+    const result = await OrderNested.collection.insertOne({ name: 'legacy' });
+    const legacyId = result.insertedId;
+
+    const doc = await OrderNested.findById(legacyId);
+    await doc.save();
+    await wait();
+
+    const logs = await LogHistoryNested.find({ model_id: legacyId, change_type: 'update' }).lean();
+    expect(logs.length).toBe(0);
+  });
+
+  it('logs an update when a nested missing field is explicitly set to its default value', async () => {
+    const result = await OrderNested.collection.insertOne({ name: 'legacy' });
+    const legacyId = result.insertedId;
+
+    const doc = await OrderNested.findById(legacyId);
+    doc.config.active = false;
+    doc.markModified('config.active');
+    await doc.save();
+    await wait();
+
+    const logs = await LogHistoryNested.find({ model_id: legacyId, change_type: 'update' }).lean();
+    expect(logs.length).toBe(1);
+    expect(logs[0].logs[0].field_name).toBe('config.active');
+    expect(logs[0].logs[0].to_value).toBe('false');
+    expect(logs[0].logs[0].change_type).toBe('add');
+  });
+});
+
 describe('mongoose-log-history plugin - Explicit Set of Default-Value Field', () => {
   let OrderActive;
   let LogHistoryActive;
