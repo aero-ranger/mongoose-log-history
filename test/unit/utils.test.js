@@ -10,7 +10,9 @@ const {
   diffSimpleArray,
   setByPath,
   valueToString,
+  deepClone,
 } = require('../../dist/utils');
+const mongoose = require('mongoose');
 
 describe('utils', () => {
   describe('isDate', () => {
@@ -218,6 +220,74 @@ describe('utils', () => {
       const obj = {};
       setByPath(obj, 'safe.nested.value', 123);
       expect(obj).toEqual({ safe: { nested: { value: 123 } } });
+    });
+  });
+
+  describe('deepClone', () => {
+    it('returns primitives and null as-is', () => {
+      expect(deepClone(null)).toBeNull();
+      expect(deepClone(42)).toBe(42);
+      expect(deepClone('str')).toBe('str');
+      expect(deepClone(true)).toBe(true);
+    });
+
+    it('clones a plain object', () => {
+      const obj = { a: 1, b: { c: 2 } };
+      const cloned = deepClone(obj);
+      expect(cloned).toEqual(obj);
+      expect(cloned).not.toBe(obj);
+      expect(cloned.b).not.toBe(obj.b);
+    });
+
+    it('clones an array', () => {
+      const arr = [1, { x: 2 }, [3]];
+      const cloned = deepClone(arr);
+      expect(cloned).toEqual(arr);
+      expect(cloned).not.toBe(arr);
+      expect(cloned[1]).not.toBe(arr[1]);
+    });
+
+    it('clones a Date as a new Date instance', () => {
+      const d = new Date('2020-06-15T00:00:00.000Z');
+      const cloned = deepClone(d);
+      expect(cloned).toEqual(d);
+      expect(cloned).not.toBe(d);
+      expect(cloned instanceof Date).toBe(true);
+    });
+
+    it('returns an ObjectId as-is without spreading it into { id: Buffer }', () => {
+      const oid = new mongoose.Types.ObjectId();
+      const cloned = deepClone(oid);
+      expect(cloned).toBe(oid);
+      expect(cloned instanceof mongoose.Types.ObjectId).toBe(true);
+    });
+
+    it('preserves ObjectId values nested inside a plain object', () => {
+      const oid = new mongoose.Types.ObjectId();
+      const obj = { ref: oid, name: 'test' };
+      const cloned = deepClone(obj);
+      expect(cloned.ref instanceof mongoose.Types.ObjectId).toBe(true);
+      expect(cloned.ref.toString()).toBe(oid.toString());
+      expect(cloned).not.toBe(obj);
+    });
+
+    it('preserves ObjectId values nested inside an array', () => {
+      const oid1 = new mongoose.Types.ObjectId();
+      const oid2 = new mongoose.Types.ObjectId();
+      const arr = [oid1, { ref: oid2 }];
+      const cloned = deepClone(arr);
+      expect(cloned[0] instanceof mongoose.Types.ObjectId).toBe(true);
+      expect(cloned[0].toString()).toBe(oid1.toString());
+      expect(cloned[1].ref instanceof mongoose.Types.ObjectId).toBe(true);
+      expect(cloned[1].ref.toString()).toBe(oid2.toString());
+    });
+
+    it('does not produce a Buffer-shaped plain object when cloning an ObjectId', () => {
+      const oid = new mongoose.Types.ObjectId();
+      const cloned = deepClone(oid);
+      // The old buggy behavior spread ObjectId into { id: Buffer, _bsontype: 'ObjectId', ... }
+      expect(cloned instanceof mongoose.Types.ObjectId).toBe(true);
+      expect(Object.getPrototypeOf(cloned)).not.toBe(Object.prototype);
     });
   });
 

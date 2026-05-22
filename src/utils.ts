@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { ArrayDiff, PluginOptions, TrackedField } from './types';
 
 /**
@@ -402,6 +403,10 @@ export function deepClone<T>(obj: T): T {
 
   if (obj instanceof Date) {
     return new Date(obj.getTime()) as T;
+  }
+
+  if (obj instanceof Types.ObjectId) {
+    return obj;
   }
 
   if (Array.isArray(obj)) {
