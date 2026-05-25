@@ -27,7 +27,7 @@
     "format": "prettier --write .",
     "type-check": "tsc --noEmit",
     "test:ci": "npm run type-check && npm run build && npm run lint",
-    "prepare": "husky",
+    "prepare": "npm run build && ([ -d .git ] && husky || true)",
     "test": "jest"
   },
   "repository": {
